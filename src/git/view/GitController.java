@@ -1,5 +1,10 @@
 package git.view;
 
+import java.nio.file.Path;
+import java.util.List;
+
+import git.tools.CommitMessage;
+import git.tools.FileState;
 import git.tools.GitRepository;
 
 public class GitController {
@@ -15,7 +20,7 @@ public class GitController {
 				Item.of("Create a branch", this::createBranch), Item.of("Rename a branch", this::renameBranch),
 				Item.of("Delete a branch", this::deleteBranch), Item.of("Log", this::log),
 				Item.of("Branches", this::branches), Item.of("Commit content", this::commitContent),
-				Item.of("switchTo", this::switchTo), Item.of("getHead", this::getHead),
+				Item.of("SwitchTo", this::switchTo), Item.of("Get head", this::getHead),
 				Item.of("Add an ignored filename expression", this::addIgnoredFileNameExp),
 				Item.of("Exit", (io) -> git.save(), true));
 	}
@@ -26,7 +31,13 @@ public class GitController {
 	}
 
 	private void info(InputOutput io) {
-		git.info().forEach(io::writeLine);
+		List<FileState> files = git.info();
+		if (!files.isEmpty()) {
+			io.writeLine("Files:");
+			files.forEach(io::writeLine);
+		} else {
+			io.writeLine("No files in directory.");
+		}
 	}
 
 	private void createBranch(InputOutput io) {
@@ -46,16 +57,34 @@ public class GitController {
 	}
 
 	private void log(InputOutput io) {
-		git.log().forEach(io::writeLine);
+		List<CommitMessage> commitMsg = git.log();
+		if (!commitMsg.isEmpty()) {
+			io.writeLine("Commits:");
+			commitMsg.forEach(io::writeLine);
+		} else {
+			io.writeLine("No commits yet.");
+		}
 	}
 
 	private void branches(InputOutput io) {
-		git.branches().forEach(io::writeLine);
+		List<String> branches = git.branches();
+		if (!branches.isEmpty()) {
+			io.writeLine("Branches:");
+			branches.forEach(io::writeLine);
+		} else {
+			io.writeLine("No files in directory.");
+		}
 	}
 
 	private void commitContent(InputOutput io) {
 		String commitName = io.readString("Enter a name of branch/commit:");
-		git.commitContent(commitName).forEach(io::writeLine);
+		List<Path> files = git.commitContent(commitName);
+		if (!files.isEmpty()) {
+			io.writeLine("Files in the branch/commit:");
+			files.forEach(io::writeLine);
+		} else {
+			io.writeLine("No files in the branch/commit.");
+		}
 	}
 
 	private void switchTo(InputOutput io) {

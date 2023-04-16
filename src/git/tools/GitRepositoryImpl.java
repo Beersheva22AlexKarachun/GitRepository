@@ -18,8 +18,9 @@ public class GitRepositoryImpl implements GitRepository {
 	private static final int MAX_DEPTH = 1;
 	private static final String TEST_STRING = "testString";
 	private static final String INITIAL_BRANCH = "master";
-	private static final String ALGORITHM = "SHA-1";
 	private static final int COMMIT_SHORT_NAME_LENGHT = 7;
+
+	private static final String ALGORITHM = "SHA-1";
 	private static MessageDigest digest;
 
 	private String head;
@@ -28,15 +29,13 @@ public class GitRepositoryImpl implements GitRepository {
 	private final HashSet<String> ignoredExps = new HashSet<>();
 
 	public static GitRepositoryImpl init() {
-		GitRepositoryImpl git = null;
+		GitRepositoryImpl git = new GitRepositoryImpl();
 		if (Files.exists(Path.of(GIT_FILE))) {
 			try (ObjectInputStream input = new ObjectInputStream(new FileInputStream(GIT_FILE))) {
 				git = (GitRepositoryImpl) input.readObject();
-			} catch (Exception e) { // FIXME think about exceptions
-				throw new RuntimeException(e.toString()); // some error
+			} catch (Exception e) {
+				new RuntimeException(e);
 			}
-		} else {
-			git = new GitRepositoryImpl();
 		}
 		try {
 			digest = MessageDigest.getInstance(ALGORITHM);
@@ -56,10 +55,8 @@ public class GitRepositoryImpl implements GitRepository {
 			return "Nothing to commit.";
 		}
 
-		Map<String, File> files = (HashMap<String, File>) fileStates.stream()
-				.filter(file -> file.status() != Status.DELETED).map(FileState::name)
-				.collect(Collectors.toMap(s -> s, this::getFile));
-
+		Map<String, File> files = fileStates.stream().filter(file -> file.status() != Status.DELETED)
+				.map(FileState::name).collect(Collectors.toMap(s -> s, this::getFile));
 		String commitName = generateCommitName((Serializable) files);
 		String shortCommitName = commitName.substring(0, COMMIT_SHORT_NAME_LENGHT);
 		commits.put(shortCommitName, new Commit(commitName, commitMessage, getCommitName(head), files));
@@ -80,7 +77,7 @@ public class GitRepositoryImpl implements GitRepository {
 					Files.getLastModifiedTime(filePath).toInstant());
 		} catch (IOException e) {
 			// FIXME
-			throw new IOError(e);
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -88,7 +85,8 @@ public class GitRepositoryImpl implements GitRepository {
 		try {
 			return byteArrayToHexString(digest.digest(toBytesArray(data)));
 		} catch (IOException e) {
-			throw new RuntimeException(e); // FIXME
+			// FIXME
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -99,9 +97,9 @@ public class GitRepositoryImpl implements GitRepository {
 		}
 		if (branches.putIfAbsent(branchName, getCommitName(head)) == null) {
 			head = branchName;
-			return String.format("Branch \"%s\" has been created", branchName);
+			return String.format("Branch \"%s\" has been created.", branchName);
 		} else {
-			return String.format("Branch \"%s\"'s already exists", branchName);
+			return String.format("Branch \"%s\"'s already exists.", branchName);
 		}
 	}
 
@@ -125,7 +123,27 @@ public class GitRepositoryImpl implements GitRepository {
 	public String deleteBranch(String branchName) {
 		String errorMsg = "Unable to delete the branch %s: the branch doesn't exist.";
 		String msg = "Branch %s has been deleted.";
-		return String.format(branches.remove(branchName) != null ? msg : errorMsg, branchName);
+		if (branches.containsKey(head) && head.equals(branchName)) {
+			return String.format("Unable to delete head.");
+		}
+		if (branches.remove(branchName) == null) {
+			return String.format(errorMsg, branchName);
+		}
+		Set<String> branchCommits = new HashSet<>();
+		branches.keySet().stream().forEach(branch -> {
+			String commitName = branches.get(branch);
+			while (commitName != null) {
+				branchCommits.add(commitName);
+				commitName = commits.get(commitName).getPrevCommit();
+			}
+		});
+		String commitName = branches.get(branchName);
+		while (!branchCommits.contains(commitName)) {
+			commits.remove(commitName);
+			commitName = commits.get(commitName).getPrevCommit();
+		}
+
+		return String.format(msg, branchName);
 	}
 
 	@Override
@@ -154,7 +172,6 @@ public class GitRepositoryImpl implements GitRepository {
 			return "There are uncommited files: switchTo may only be done after commit.";
 		}
 		if (head.equals(name)) {
-			// FIXME change message
 			return String.format("Head's already on %s with name \"%s\".",
 					branches.containsKey(head) ? "branch" : "commit", name);
 		}
@@ -183,8 +200,8 @@ public class GitRepositoryImpl implements GitRepository {
 				Files.write(filePath, Arrays.asList(file.data()));
 				Files.setLastModifiedTime(filePath, FileTime.from(file.lastModified()));
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				// FIXME
+				throw new RuntimeException(e);
 			}
 		});
 	}
@@ -195,6 +212,7 @@ public class GitRepositoryImpl implements GitRepository {
 				Files.delete(file);
 			} catch (IOException e) {
 				// FIXME
+				throw new RuntimeException(e);
 			}
 		}
 	}
@@ -209,7 +227,8 @@ public class GitRepositoryImpl implements GitRepository {
 		try (ObjectOutputStream output = new ObjectOutputStream(new FileOutputStream(GIT_FILE))) {
 			output.writeObject(this);
 		} catch (Exception e) {
-			throw new RuntimeException(e.toString()); // FIXME
+			// FIXME
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -218,9 +237,9 @@ public class GitRepositoryImpl implements GitRepository {
 		try {
 			TEST_STRING.matches(regex);
 			ignoredExps.add(regex);
-			return "Regular expression has been added.";
+			return String.format("Regular expression \"%s\"has been added.", regex);
 		} catch (PatternSyntaxException e) {
-			return "Inalid regular expression.";
+			return "Invalid regular expression.";
 		}
 	}
 
@@ -244,7 +263,8 @@ public class GitRepositoryImpl implements GitRepository {
 						.forEach(files::add);
 			}
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
+			// FIXME
+			throw new RuntimeException(e);
 		}
 		Collections.sort(files);
 		return files;
@@ -263,7 +283,7 @@ public class GitRepositoryImpl implements GitRepository {
 
 		} catch (IOException e) {
 			// FIXME
-			throw new RuntimeException();
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -286,5 +306,9 @@ public class GitRepositoryImpl implements GitRepository {
 	@Override
 	public boolean deleteIgnoredExp(String regex) {
 		return ignoredExps.remove(regex);
+	}
+	
+	public Set<String> commitsSet(){
+		return commits.keySet();
 	}
 }
